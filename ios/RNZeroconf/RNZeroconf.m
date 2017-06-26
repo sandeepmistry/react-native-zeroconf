@@ -134,4 +134,9 @@ RCT_EXPORT_METHOD(stop)
     }
 }
 
+- (dispatch_queue_t)methodQueue
+{
+  return dispatch_queue_create("com.balthazargronon.RCTZeroconf", DISPATCH_QUEUE_SERIAL);
+}
+
 @end
