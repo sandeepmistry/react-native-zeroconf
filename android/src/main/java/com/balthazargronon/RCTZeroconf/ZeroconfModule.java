@@ -3,6 +3,7 @@ package com.balthazargronon.RCTZeroconf;
 import android.content.Context;
 import android.net.nsd.NsdManager;
 import android.net.nsd.NsdServiceInfo;
+import android.os.Build;
 
 import com.facebook.react.bridge.ReactApplicationContext;
 import com.facebook.react.bridge.ReactContext;
@@ -13,7 +14,6 @@ import com.facebook.react.bridge.WritableMap;
 import com.facebook.react.bridge.WritableNativeArray;
 import com.facebook.react.bridge.WritableNativeMap;
 import com.facebook.react.modules.core.DeviceEventManagerModule;
-import com.youview.tinydnssd.MDNSDiscover;
 
 import java.io.IOException;
 import java.util.Map;
@@ -46,6 +46,7 @@ public class ZeroconfModule extends ReactContextBaseJavaModule {
 
     protected NsdManager mNsdManager;
     protected NsdManager.DiscoveryListener mDiscoveryListener;
+    protected NsdManager.ResolveListener mResolveListener;
 
     public ZeroconfModule(ReactApplicationContext reactContext) {
         super(reactContext);
@@ -95,7 +96,7 @@ public class ZeroconfModule extends ReactContextBaseJavaModule {
                 sendEvent(getReactApplicationContext(), EVENT_FOUND, service);
 
                 String name = serviceInfo.getServiceName() + "." + serviceInfo.getServiceType() + "local";
-                resolve(name);
+                resolve(serviceInfo);
             }
 
             @Override
@@ -106,38 +107,46 @@ public class ZeroconfModule extends ReactContextBaseJavaModule {
             }
         };
 
+        mResolveListener = new NsdManager.ResolveListener() {
+            @Override
+            public void onResolveFailed(NsdServiceInfo serviceInfo, int errorCode) {
+                String error = "Resolving service failed with error code: " + errorCode;
+                sendEvent(getReactApplicationContext(), EVENT_ERROR, error);
+            }
+
+            @Override
+            public void onServiceResolved(NsdServiceInfo serviceInfo) {
+                WritableMap service = new WritableNativeMap();
+                service.putString(KEY_SERVICE_NAME, serviceInfo.getServiceName());
+                service.putString(KEY_SERVICE_FULL_NAME, serviceInfo.getServiceName() + ".local" + serviceInfo.getServiceType());
+                service.putString(KEY_SERVICE_HOST, serviceInfo.getServiceName() + ".local.");
+                service.putInt(KEY_SERVICE_PORT, serviceInfo.getPort());
+
+                WritableMap txt = new WritableNativeMap();
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                    Map<String, byte[]> attributes = serviceInfo.getAttributes();
+
+                    for (Map.Entry<String, byte[]> entry : attributes.entrySet()) {
+                    }
+                }
+
+                service.putMap(KEY_SERVICE_TXT, txt);
+
+                WritableArray addresses = new WritableNativeArray();
+                addresses.pushString(serviceInfo.getHost().getHostAddress());
+
+                service.putArray(KEY_SERVICE_ADDRESSES, addresses);
+
+                sendEvent(getReactApplicationContext(), EVENT_RESOLVE, service);
+            }
+        };
+
         String serviceType = String.format("_%s._%s.", type, protocol);
         mNsdManager.discoverServices(serviceType, NsdManager.PROTOCOL_DNS_SD, mDiscoveryListener);
     }
 
-    protected void resolve(String serviceName) {
-        WritableMap service = new WritableNativeMap();
-
-        try {
-            MDNSDiscover.Result serviceResult = MDNSDiscover.resolve(serviceName, RESOLVE_TIMEOUT);
-
-            service.putString(KEY_SERVICE_NAME, getServiceName(serviceResult.srv.fqdn));
-            service.putString(KEY_SERVICE_FULL_NAME, serviceResult.srv.fqdn);
-            service.putString(KEY_SERVICE_HOST, serviceResult.srv.target);
-            service.putInt(KEY_SERVICE_PORT, serviceResult.srv.port);
-
-            WritableMap txt = new WritableNativeMap();
-            for (Map.Entry<String, String> entry : serviceResult.txt.dict.entrySet()) {
-                txt.putString(entry.getKey(), entry.getValue());
-            }
-
-            service.putMap(KEY_SERVICE_TXT, txt);
-
-            WritableArray addresses = new WritableNativeArray();
-            addresses.pushString(serviceResult.a.ipaddr);
-
-            service.putArray(KEY_SERVICE_ADDRESSES, addresses);
-
-            sendEvent(getReactApplicationContext(), EVENT_RESOLVE, service);
-        } catch (IOException e) {
-            String error = "Resolving service failed with message: " + e;
-            sendEvent(getReactApplicationContext(), EVENT_ERROR, error);
-        }
+    protected void resolve(NsdServiceInfo serviceInfo) {
+        mNsdManager.resolveService(serviceInfo, mResolveListener);
     }
 
     @ReactMethod
@@ -155,19 +164,6 @@ public class ZeroconfModule extends ReactContextBaseJavaModule {
         reactContext
                 .getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter.class)
                 .emit(eventName, params);
-    }
-
-    private String getServiceName(String fqdn) {
-        String pattern = "^[^.]*";
-        Pattern r = Pattern.compile(pattern);
-
-        Matcher m = r.matcher(fqdn);
-
-        if (m.find()) {
-            return m.group(0);
-        }
-
-        return fqdn;
     }
 
     @Override
