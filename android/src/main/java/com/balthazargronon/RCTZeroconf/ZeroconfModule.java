@@ -42,8 +42,6 @@ public class ZeroconfModule extends ReactContextBaseJavaModule {
     public static final String KEY_SERVICE_ADDRESSES = "addresses";
     public static final String KEY_SERVICE_TXT = "txt";
 
-    public static final int RESOLVE_TIMEOUT = 0; // Will wait forever
-
     protected NsdManager mNsdManager;
     protected NsdManager.DiscoveryListener mDiscoveryListener;
     protected NsdManager.ResolveListener mResolveListener;
