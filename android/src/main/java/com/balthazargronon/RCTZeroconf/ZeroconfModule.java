@@ -125,7 +125,14 @@ public class ZeroconfModule extends ReactContextBaseJavaModule {
                     Map<String, byte[]> attributes = serviceInfo.getAttributes();
 
                     for (Map.Entry<String, byte[]> entry : attributes.entrySet()) {
-                        txt.putString(entry.getKey(), entry.getValue().toString());
+                        String key = entry.getKey();
+                        byte[] value = entry.getValue();
+
+                        if (value == null) {
+                            txt.putString(key, "");
+                        } else {
+                            txt.putString(key, value.toString());
+                        }
                     }
                 }
 
